@@ -8,7 +8,7 @@ import requests
 app = Flask(__name__)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# 🔧 Fonction météo connectée à OpenWeatherMap
+# 🌤 Fonction météo via OpenWeatherMap
 def get_weather(city):
     api_key = os.getenv("OPENWEATHER_API_KEY")
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric&lang=fr"
@@ -23,7 +23,7 @@ def get_weather(city):
     except Exception:
         return "Une erreur est survenue en récupérant la météo."
 
-# 🔍 Détection d’intention
+# 🧠 Détection des intentions
 def detect_intent(text):
     lowered = text.lower()
     if any(greet in lowered for greet in ["bonjour", "salut", "hello", "hi", "hey"]):
@@ -34,9 +34,11 @@ def detect_intent(text):
         return "recommendation"
     if any(keyword in lowered for keyword in ["visiter", "tourisme", "à voir", "à faire", "guide", "lieux à", "monuments", "touristique"]):
         return "tourism"
+    if any(keyword in lowered for keyword in ["programme", "circuit", "itinéraire", "planning", "jour par jour", "planning de visite"]):
+        return "itinerary"
     return "chat"
 
-# 💬 Présentation automatique selon la langue
+# 👋 Présentation adaptée à la langue
 def get_intro_by_lang(lang):
     if lang.startswith("fr"):
         return "👋 Bonjour ! Je suis Askély, votre assistant intelligent multilingue. Je peux vous aider à organiser votre voyage, découvrir les lieux à visiter, connaître la météo ou trouver les meilleures adresses locales."
@@ -73,6 +75,17 @@ def whatsapp_reply():
     elif intent == "tourism":
         messages = [
             {"role": "system", "content": "Tu es Askély, un guide touristique virtuel expert du Maroc et du monde. Quand un utilisateur demande des conseils touristiques, propose-lui des idées de visites, d’activités culturelles, de monuments, de balades typiques et de spécialités locales."},
+            {"role": "user", "content": incoming_msg}
+        ]
+        response = client.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=messages
+        )
+        answer = response.choices[0].message.content
+
+    elif intent == "itinerary":
+        messages = [
+            {"role": "system", "content": "Tu es Askély, un expert en circuits touristiques internationaux. Quand un utilisateur te demande un itinéraire ou un circuit de voyage jour par jour, tu dois lui proposer un programme détaillé, adapté à la destination et à la durée du séjour."},
             {"role": "user", "content": incoming_msg}
         ]
         response = client.chat.completions.create(
