@@ -8,7 +8,9 @@ import requests
 app = Flask(__name__)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# 🌤 Fonction météo via OpenWeatherMap
+# 🧠 Stockage temporaire des profils utilisateurs (par numéro WhatsApp)
+user_profiles = {}
+
 def get_weather(city):
     api_key = os.getenv("OPENWEATHER_API_KEY")
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric&lang=fr"
@@ -23,9 +25,10 @@ def get_weather(city):
     except Exception:
         return "Une erreur est survenue en récupérant la météo."
 
-# 🧠 Détection des intentions
 def detect_intent(text):
     lowered = text.lower()
+    if "je suis" in lowered and any(p in lowered for p in ["en couple", "solo", "avec enfants", "senior", "aventure", "romantique"]):
+        return "profile_set"
     if any(greet in lowered for greet in ["bonjour", "salut", "hello", "hi", "hey"]):
         return "greeting"
     if "météo" in lowered or "weather" in lowered:
@@ -38,7 +41,6 @@ def detect_intent(text):
         return "itinerary"
     return "chat"
 
-# 👋 Présentation adaptée à la langue
 def get_intro_by_lang(lang):
     if lang.startswith("fr"):
         return "👋 Bonjour ! Je suis Askély, votre assistant intelligent multilingue. Je peux vous aider à organiser votre voyage, découvrir les lieux à visiter, connaître la météo ou trouver les meilleures adresses locales."
@@ -47,14 +49,19 @@ def get_intro_by_lang(lang):
     else:
         return "👋 Hello! I’m Askély, your assistant. I can help with tourism, weather, recommendations and more!"
 
-# 📲 Webhook WhatsApp
 @app.route("/webhook/whatsapp", methods=["POST"])
 def whatsapp_reply():
     incoming_msg = request.values.get('Body', '').strip()
+    sender = request.values.get('From', '')
     lang = detect(incoming_msg)
     intent = detect_intent(incoming_msg)
 
-    if intent == "greeting":
+    # Mise à jour du profil utilisateur
+    if intent == "profile_set":
+        user_profiles[sender] = incoming_msg
+        answer = "Merci ! Ton profil a bien été enregistré. Je personnaliserai désormais mes réponses selon tes préférences de voyage."
+
+    elif intent == "greeting":
         answer = get_intro_by_lang(lang)
 
     elif intent == "weather":
@@ -84,8 +91,12 @@ def whatsapp_reply():
         answer = response.choices[0].message.content
 
     elif intent == "itinerary":
+        profil = user_profiles.get(sender, None)
+        system_msg = "Tu es Askély, un expert en circuits touristiques internationaux. Propose des programmes jour par jour adaptés à la destination demandée, à la durée et si disponible, au profil du voyageur."
+        if profil:
+            system_msg += f" Voici le profil de l'utilisateur : {profil}"
         messages = [
-            {"role": "system", "content": "Tu es Askély, un expert en circuits touristiques internationaux. Quand un utilisateur te demande un itinéraire ou un circuit de voyage jour par jour, tu dois lui proposer un programme détaillé, adapté à la destination et à la durée du séjour."},
+            {"role": "system", "content": system_msg},
             {"role": "user", "content": incoming_msg}
         ]
         response = client.chat.completions.create(
